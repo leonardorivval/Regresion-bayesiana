@@ -1,0 +1,197 @@
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+library(BAS)
+library(MASS)
+library(GGally)
+```
+
+### Load data
+
+```{r load-data}
+load("movies.Rdata")
+```
+
+* * *
+
+## Part 1: Data
+
+We can appreciate that the data is just captured/recollected from the sites Rotten Tomatoes and IMDB. Therefore the data is not random nor controlled, it is just data from the internet. It probably is from a limited group also, since you need to have a computer/digital device, internet, being interest in commenting on does pages, we have no clue from which people that data id gathered, etc. Because of that our analysis need to be taken with a grain of salt. Also, our data cannot be used for causality since we are not manipulating anything is just a recollection of already being data.
+
+With that in mind let's proceed with our analysis
+
+* * *
+
+## Part 2: Data manipulation
+
+We need to create some new variables for conduction our analysis according to the instructions. The variables `feature_film` with levels yes (movies that are feature films) and no; `mpaa_rating_R` with levels yes (movies that are R rated) and no; `oscar_season` with levels yes (if movie is released in November, October, or December) and no; `summer_season` with levels yes (if movie is released in May, June, July, or August) and no.
+
+```{r feature_film}
+movies <- mutate(movies,feature_film= ifelse(movies$title_type== "Feature Film", "Yes", "No"))
+```
+
+```{r mpaa_rating_R}
+movies <- mutate(movies, mpaa_rating_R=ifelse(movies$mpaa_rating=="R","Yes", "No"))
+```
+
+```{r oscar_season}
+a<- c(11, 10, 12)
+movies <- mutate(movies, oscar_season= ifelse((movies$thtr_rel_month==a), "Yes", "No"))
+```
+
+```{r summer_season}
+b<- c(5, 6, 7, 8)
+movies <- mutate(movies, summer_season= ifelse((movies$thtr_rel_month %in% 5) | (movies$thtr_rel_month %in% 6) | (movies$thtr_rel_month %in% 7)| (movies$thtr_rel_month %in% 8), "Yes", "No"))
+```
+
+With this simple code using mutate and the ifelse function we have created the variables we needed for our current project. Now let´s continue with our exploration of the data
+* * *
+
+## Part 3: Exploratory data analysis
+```{r summary of the data}
+str(movies)
+```
+From this we can appreciate that some variables are just useless. We see that: all the actor (actor1, actor2, etc) variables, the imdb_url, rt_url, the title,director, probably the oscar nominations/winners, theater/dvd release dates, the studio, mpaa_rating (correlation with our new variable), the ratings, genre (correlation with our new variable), are all useless. 
+
+This leaves us with a small set relevant variables: runtime, feature_film, mpaa_rating_R, oscar_season, summer_season, critics_score, and audience_score.
+
+Now let's see how this data is distributed:
+
+```{r runtime distribution}
+ggplot(data=movies, aes(x=runtime))+
+  geom_histogram(color= "black", fill="light blue")
+```
+It seems to be nearly normal, but it seems that there is one particular movie that is way up there near the 300 min!
+
+```{r feature film}
+ggplot(data=movies, aes(x=feature_film))+
+  geom_bar(color="black", fill="light blue")
+```
+We can also appreciate that there is way more feature_films than does that don't. Which makes sense since short films are not not what we know Hollywood for.
+
+```{r mpaa_rating_R plot}
+ggplot(data = movies, aes(x=mpaa_rating_R))+
+  geom_bar(color="black", fill="light blue")
+```
+This is very interesting since I would have guess that the R rating was the less, since that seems to be more commercial since more persons can watch it. Nontheless we appreciate that it is even in comparisson to the other classifications!
+
+```{r oscar_season plot}
+ggplot(data=movies, aes(x=oscar_season))+
+  geom_bar(color="black", fill="light blue")
+```
+This probably means that producers are not here for winning Oscars but for other purposes.
+
+```{r summer_season plot}
+ggplot(data=movies, aes(x=summer_season))+
+  geom_bar(color="black", fill="light blue")
+```
+This implies that neither is summer season THE season, therefore we can assume that the first third of the year is actually THE season.
+
+```{r critics_score plot}
+ggplot(data = movies, aes(x=critics_score))+
+  geom_histogram(color="black", fill="light blue")
+```
+This just seem to be all over the place, or that the critics are actually very impartial and that lower nor higher scores are the rule.
+
+```{r audience_score plot}
+ggplot(data=movies, aes(x=audience_score))+
+  geom_histogram(color="black", fill="light blue")
+```
+Contrary to our critics this seems a little bit tilted to the right, or that they tend to be a bit more generous with their score.
+
+```{r summary statistics}
+summary(movies$runtime)
+summary(movies$critics_score)
+summary(movies$audience_score)
+```
+We can appreciate more clearly what we saw earlier, that the movies are not short films since the mean duration is 105.8 min, and that the critics (mean=62.32 and 57.69) have lower and more variable(33 to 83 and 46 to 80) scores than audience.
+
+* * *
+
+## Part 4: Modeling
+
+First let's try the non informative model which is just the same as the least square model or frequentist regression,
+```{r model non informative}
+movies <- na.omit(movies)
+movies_lm <-lm(audience_score~ runtime + feature_film + mpaa_rating_R +
+                  oscar_season + summer_season + critics_score, data = movies)
+
+summary(movies_lm)
+```
+At first sight we see that only runtime, feature_film, and critic score are significant for the model. Also that their coefficients imply that when runtime increases by a unit the score of audience increases by .08; when feature_film is the case it reduces the score by -6 units; and when critics score increases by a unit also the one by te audience but by .47.  Let´s make a model selection procedure with using the BIC.
+```{r BIC selection}
+n<- nrow(movies)
+stepAIC(movies_lm, k=log(n))
+```
+According to our backwards model selection using BIC we find that the best model is: audience_score ~ runtime + feature_film + critics_score. We also need to see if the diagnostic plots say if this model is correct or not.
+
+```{r diagnostics homocedasticity}
+plot(movies_lm, which = 1)
+```
+It seems that homocedasticity is more or less correct
+
+```{r diagnostics resid normal}
+plot(movies_lm, which = 2)
+```
+Also residuals seem to be quite normal except for some outliers but overall seems great.
+```{r }
+model_afterBIC <- lm(audience_score ~ runtime + feature_film + critics_score, data=movies )
+ggpairs(model_afterBIC)
+```
+So, apparently there is no significant colinearity but a mild .2 between critics score and runtime.
+
+Now let's model this data using the BAS and the BMA to see how model averaging changes our view
+```{r}
+movies <- na.omit(movies)
+movies_lm_BMA <- bas.lm(audience_score~ runtime + feature_film + mpaa_rating_R+
+                  oscar_season + summer_season + critics_score , data = movies, prior = "BIC", modelprior = uniform())
+
+movies_lm_BMA
+summary(movies_lm_BMA)
+```
+
+```{r model uncertainty}
+image(movies_lm_BMA, rotate=F)
+```
+
+As we saw earlier when our criterion of selection changes from BIC to BF we have a completely different model. Finally let's make some credible intervals for our coefficients in the BMA model.
+
+```{r confint}
+coefs<-coef(movies_lm_BMA)
+confint(coefs)
+```
+
+With this we now can see that the coefficients have credible interval with 95% probability of having critic score (coefficient) between (0.4377943,0.5326026) but with a prediction of 0.486641029; feature_filmYes credible interval between (-9.1178529, 0.0000000) and estimate of -2.954559697; runtime credible interval (0.0000000, 0.1128491) and estimate of 0.031606627.
+
+* * *
+
+## Part 5: Prediction
+We need to generate a new data frame for predicting using our model after the BIC backward selection. Also let use the model that only uses the critics score to see how it does the job.
+
+```{r data for prediction}
+data_for_BICmodel <- data.frame(runtime= 100, feature_film= "Yes", critics_score=100)
+
+predict.lm(model_afterBIC, data_for_BICmodel, interval = "prediction")
+```
+Therefore we expect that our audience would rate this movie with a 81.24772 but that a credible interval for this prediction is about (53.11886, 109.3766).
+
+```{r data for prediction 2}
+data_for_BMAmodel <- data.frame(critics_score=100)
+lm_according_to_BF <- lm(audience_score~ critics_score, data=movies)
+predict.lm(lm_according_to_BF, data_for_BMAmodel, interval = "prediction")
+```
+We see that the models are almost as good at predicting the audience score with this model predicting an audience score of 83.48316 when critics score of 100 with a credible interval of (55.14748, 111.8188)
+* * *
+
+## Part 6: Conclusion
+
+This project was very interesting to do I learned a lot about presenting the uncertainty about the models and that model selection is not a black and white thing. Also, sometimes less complex models may be better or equally good as more complex models.
+
+Now, we were able to appreciate that the models predicted similar scores for audiences when we used the model based on the BIC or on our BMA. Therefore it seems that our audiences are influenced by our critics rating of the movies. Which makes sense since we normally are influenced by what experts think about. Nonetheless we need to be cautious with this interpretation since, as we noticed before, this is not an experiment and we cannot infere causality nor this results can be generalized to other populations (e.g audience of Bollywood).
+
+
